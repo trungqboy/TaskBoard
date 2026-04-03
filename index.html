@@ -1,0 +1,951 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TaskBoard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;600&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            --bg: #f7f7f5;
+            --surface: #ffffff;
+            --border: #e8e8e5;
+            --border-hover: #d0d0cc;
+            --text-primary: #1a1a18;
+            --text-secondary: #6b6b68;
+            --text-muted: #a0a09c;
+            --accent: #2563eb;
+            --accent-light: #eff6ff;
+            --col-width: 320px;
+            --radius-sm: 6px;
+            --radius-md: 10px;
+            --radius-lg: 14px;
+        }
+
+        body { font-family: 'Noto Sans JP','DM Sans',sans-serif; background:var(--bg); color:var(--text-primary); min-height:100vh; overflow-x:auto; }
+
+        /* ── Nav ── */
+        .topnav { height:52px; background:var(--surface); border-bottom:1px solid var(--border); display:flex; align-items:center; padding:0 24px; gap:12px; position:sticky; top:0; z-index:100; }
+        .topnav-logo { font-family:'DM Sans',sans-serif; font-weight:600; font-size:15px; letter-spacing:-0.3px; }
+        .topnav-sep { width:1px; height:18px; background:var(--border); }
+        .topnav-page { font-size:14px; color:var(--text-secondary); }
+        .topnav-actions { margin-left:auto; display:flex; align-items:center; gap:8px; }
+        .nav-btn { height:32px; padding:0 12px; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--surface); font-size:13px; font-family:inherit; color:var(--text-secondary); cursor:pointer; display:flex; align-items:center; gap:6px; transition:border-color .15s,background .15s; }
+        .nav-btn:hover { border-color:var(--border-hover); background:var(--bg); }
+        .nav-btn.primary { background:var(--text-primary); color:white; border-color:var(--text-primary); }
+        .nav-btn.primary:hover { background:#333; }
+        .nav-btn * { pointer-events:none; }
+
+        /* ── Board ── */
+        .board-wrap { padding:28px 24px 60px; display:flex; gap:16px; align-items:flex-start; min-width:max-content; }
+
+        /* ── Column ── */
+        .column { width:var(--col-width); flex-shrink:0; display:flex; flex-direction:column; }
+        .col-header { display:flex; align-items:center; gap:8px; padding:0 4px 10px; }
+        .col-title { font-size:14px; font-weight:600; flex:1; }
+        .col-count { font-size:12px; color:var(--text-muted); }
+        .col-menu-btn { width:24px; height:24px; border:none; background:none; cursor:pointer; border-radius:4px; color:var(--text-muted); display:flex; align-items:center; justify-content:center; opacity:0; transition:opacity .15s,background .15s; }
+        .col-menu-btn * { pointer-events:none; }
+        .column:hover .col-menu-btn { opacity:1; }
+        .col-menu-btn:hover { background:var(--border); color:var(--text-primary); }
+
+        .add-task-top { display:flex; align-items:center; gap:8px; padding:8px 10px; border:1.5px dashed var(--border); border-radius:var(--radius-md); cursor:pointer; color:var(--text-muted); font-size:13.5px; font-family:inherit; background:transparent; width:100%; transition:border-color .15s,color .15s,background .15s; margin-bottom:10px; }
+        .add-task-top:hover { border-color:var(--accent); color:var(--accent); background:var(--accent-light); }
+        .add-task-top * { pointer-events:none; }
+
+        .add-form { background:var(--surface); border:1.5px solid var(--accent); border-radius:var(--radius-md); padding:10px 12px; margin-bottom:10px; display:none; flex-direction:column; gap:8px; box-shadow:0 2px 8px rgba(37,99,235,.1); }
+        .add-form.active { display:flex; }
+        .add-form-input { border:none; outline:none; font-size:13.5px; font-family:inherit; color:var(--text-primary); resize:none; line-height:1.5; background:transparent; }
+        .add-form-input::placeholder { color:var(--text-muted); }
+        .add-form-row { display:flex; align-items:center; gap:6px; }
+        .label-select { height:26px; padding:0 8px; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--bg); font-size:12px; font-family:inherit; color:var(--text-secondary); cursor:pointer; outline:none; }
+        .form-actions { margin-left:auto; display:flex; gap:6px; }
+
+        .btn-confirm { height:28px; padding:0 12px; background:var(--accent); color:white; border:none; border-radius:var(--radius-sm); font-size:12.5px; font-family:inherit; font-weight:500; cursor:pointer; transition:background .15s; }
+        .btn-confirm:hover { background:#1d4ed8; }
+        .btn-cancel { height:28px; padding:0 10px; background:none; color:var(--text-muted); border:1px solid var(--border); border-radius:var(--radius-sm); font-size:12.5px; font-family:inherit; cursor:pointer; transition:background .15s; }
+        .btn-cancel:hover { background:var(--bg); }
+
+        /* ── Task card ── */
+        .tasks-list { display:flex; flex-direction:column; gap:8px; min-height:40px; }
+        .task-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-md); padding:12px 14px; cursor:grab; transition:border-color .15s,box-shadow .15s; position:relative; }
+        .task-card:hover { border-color:var(--border-hover); box-shadow:0 2px 8px rgba(0,0,0,.07); }
+        .task-card:active { cursor:grabbing; }
+
+        .task-label { display:inline-flex; align-items:center; height:20px; padding:0 8px; border-radius:4px; font-size:11px; font-weight:600; margin-bottom:8px; letter-spacing:.1px; cursor:default; }
+
+        .task-top-row { display:flex; align-items:flex-start; gap:8px; }
+        .task-checkbox { width:16px; height:16px; border:1.5px solid var(--border-hover); border-radius:50%; flex-shrink:0; margin-top:2px; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:border-color .15s,background .15s; background:white; }
+        .task-checkbox:hover { border-color:var(--accent); }
+        .task-checkbox.checked { border-color:#22c55e; background:#22c55e; }
+        .task-checkbox.checked::after { content:''; width:8px; height:5px; border-left:1.5px solid white; border-bottom:1.5px solid white; transform:rotate(-45deg) translateY(-1px); }
+        .task-title { font-size:13.5px; line-height:1.5; color:var(--text-primary); flex:1; font-weight:400; }
+        .task-title.done { text-decoration:line-through; color:var(--text-muted); }
+
+        /* memo truncate */
+        .task-note-wrap { margin-top:6px; padding-left:24px; }
+        .task-note { font-size:12px; color:var(--text-muted); line-height:1.55; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+        .task-note-more { margin-top:3px; background:none; border:none; cursor:pointer; font-size:11px; color:var(--accent); font-family:inherit; padding:0; }
+
+        .task-subtasks { display:flex; align-items:center; gap:5px; margin-top:8px; padding-left:24px; font-size:12px; color:var(--text-muted); }
+        .subtask-progress { display:flex; align-items:center; gap:5px; }
+        .subtask-bar { width:50px; height:3px; background:var(--border); border-radius:99px; overflow:hidden; }
+        .subtask-bar-fill { height:100%; background:#22c55e; border-radius:99px; }
+
+        .task-actions { position:absolute; top:10px; right:10px; display:flex; gap:2px; opacity:0; transition:opacity .15s; }
+        .task-card:hover .task-actions { opacity:1; }
+        .task-action-btn { width:26px; height:26px; border:none; background:none; cursor:pointer; border-radius:4px; color:var(--text-muted); display:flex; align-items:center; justify-content:center; transition:background .12s,color .12s; }
+        .task-action-btn:hover { background:var(--bg); color:var(--text-primary); }
+        .task-action-btn.danger:hover { background:#fee2e2; color:#dc2626; }
+        .task-action-btn * { pointer-events:none; }
+
+        .completed-row { display:flex; align-items:center; gap:8px; padding:8px 10px; cursor:pointer; border-radius:var(--radius-sm); color:var(--text-secondary); font-size:13.5px; transition:background .12s; user-select:none; }
+        .completed-row:hover { background:var(--border); }
+        .completed-row * { pointer-events:none; }
+        .completed-count { font-weight:500; margin-left:auto; color:var(--text-muted); font-size:13px; }
+        .completed-chevron { color:var(--text-muted); transition:transform .2s; }
+        .completed-chevron.open { transform:rotate(180deg); }
+
+        .add-col-btn { width:240px; flex-shrink:0; display:flex; align-items:center; gap:8px; padding:8px 12px; border:1.5px dashed var(--border); border-radius:var(--radius-md); cursor:pointer; color:var(--text-muted); font-size:13.5px; font-family:inherit; background:transparent; align-self:flex-start; transition:border-color .15s,color .15s; }
+        .add-col-btn:hover { border-color:var(--border-hover); color:var(--text-secondary); }
+        .add-col-btn * { pointer-events:none; }
+
+        .sortable-ghost { opacity:.35; background:var(--accent-light)!important; border-color:var(--accent)!important; }
+        .sortable-chosen { box-shadow:0 8px 24px rgba(0,0,0,.12); }
+
+        /* ═══ FILTER PANEL ═══ */
+        .filter-panel { position:fixed; top:52px; right:0; width:300px; height:calc(100vh - 52px); background:var(--surface); border-left:1px solid var(--border); z-index:90; transform:translateX(100%); transition:transform .22s cubic-bezier(.4,0,.2,1); display:flex; flex-direction:column; }
+        .filter-panel.open { transform:translateX(0); }
+        .fp-header { padding:16px 20px 12px; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; flex-shrink:0; }
+        .fp-title { font-size:14px; font-weight:600; }
+        .fp-body { flex:1; overflow-y:auto; padding:16px 20px; }
+        .fp-section { margin-bottom:22px; }
+        .fp-section-title { font-size:11px; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:.6px; margin-bottom:10px; display:flex; align-items:center; justify-content:space-between; }
+        .fp-footer { padding:12px 20px; border-top:1px solid var(--border); flex-shrink:0; }
+
+        .filter-add-btn { font-size:11px; color:var(--accent); background:none; border:none; cursor:pointer; font-family:inherit; font-weight:600; padding:2px 4px; border-radius:3px; transition:background .1s; }
+        .filter-add-btn:hover { background:var(--accent-light); }
+
+        .filter-label-row { display:flex; align-items:center; gap:8px; padding:4px 6px; border-radius:var(--radius-sm); transition:background .1s; }
+        .filter-label-row:hover { background:var(--bg); }
+        .filter-label-row:hover .lbl-edit-btns { opacity:1; }
+        .filter-checkbox { width:15px; height:15px; border:1.5px solid var(--border-hover); border-radius:3px; display:flex; align-items:center; justify-content:center; flex-shrink:0; cursor:pointer; transition:background .1s,border-color .1s; }
+        .filter-checkbox.on { background:var(--accent); border-color:var(--accent); }
+        .filter-checkbox.on::after { content:''; width:7px; height:4.5px; border-left:1.5px solid white; border-bottom:1.5px solid white; transform:rotate(-45deg) translateY(-1px); }
+        .lbl-edit-btns { margin-left:auto; display:flex; gap:2px; opacity:0; transition:opacity .15s; }
+        .lbl-edit-btn { width:22px; height:22px; border:none; background:none; cursor:pointer; border-radius:3px; color:var(--text-muted); display:flex; align-items:center; justify-content:center; transition:background .1s,color .1s; }
+        .lbl-edit-btn:hover { background:var(--border); color:var(--text-primary); }
+        .lbl-edit-btn.del:hover { background:#fee2e2; color:#dc2626; }
+        .lbl-edit-btn * { pointer-events:none; }
+
+        /* inline label editor */
+        .lbl-editor { background:var(--bg); border:1.5px solid var(--accent); border-radius:var(--radius-sm); padding:8px 10px; margin:4px 0 6px; display:none; flex-direction:column; gap:8px; }
+        .lbl-editor.open { display:flex; }
+        .lbl-editor-row { display:flex; gap:6px; align-items:center; }
+        .lbl-name-input { flex:1; padding:5px 8px; border:1px solid var(--border); border-radius:var(--radius-sm); font-size:12.5px; font-family:inherit; outline:none; background:white; }
+        .lbl-name-input:focus { border-color:var(--accent); }
+        .color-swatches { display:flex; flex-wrap:wrap; gap:5px; }
+        .color-swatch { width:20px; height:20px; border-radius:4px; cursor:pointer; border:2px solid transparent; transition:border-color .1s,transform .1s; flex-shrink:0; }
+        .color-swatch:hover { transform:scale(1.15); }
+        .color-swatch.sel { border-color:rgba(0,0,0,.4)!important; }
+        .lbl-editor-actions { display:flex; gap:6px; justify-content:flex-end; }
+
+        .fp-status-item { display:flex; align-items:center; gap:8px; padding:5px 6px; border-radius:var(--radius-sm); cursor:pointer; font-size:13px; transition:background .1s; user-select:none; }
+        .fp-status-item:hover { background:var(--bg); }
+        .filter-clear { width:100%; padding:7px; border:1px solid var(--border); border-radius:var(--radius-sm); background:none; font-size:13px; font-family:inherit; color:var(--text-secondary); cursor:pointer; transition:background .1s; }
+        .filter-clear:hover { background:var(--bg); }
+
+        /* ═══ MODAL BASE ═══ */
+        .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,.3); z-index:200; display:none; align-items:center; justify-content:center; }
+        .modal-overlay.open { display:flex; }
+        @keyframes modalIn { from{transform:translateY(-10px) scale(.97);opacity:0} to{transform:none;opacity:1} }
+        .modal { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-lg); padding:24px; box-shadow:0 20px 60px rgba(0,0,0,.15); animation:modalIn .18s cubic-bezier(.4,0,.2,1); }
+        .modal-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:18px; }
+        .modal-title { font-size:15px; font-weight:600; }
+        .modal-close { width:28px; height:28px; border:none; background:none; cursor:pointer; border-radius:5px; color:var(--text-muted); font-size:18px; display:flex; align-items:center; justify-content:center; transition:background .1s; }
+        .modal-close:hover { background:var(--bg); color:var(--text-primary); }
+        .modal-field { margin-bottom:14px; }
+        .modal-field label { display:block; font-size:12px; font-weight:500; color:var(--text-secondary); margin-bottom:5px; }
+        .modal-input { width:100%; padding:8px 10px; border:1px solid var(--border); border-radius:var(--radius-sm); font-size:13.5px; font-family:inherit; color:var(--text-primary); background:var(--bg); outline:none; transition:border-color .15s; }
+        .modal-input:focus { border-color:var(--accent); background:white; }
+        .modal-textarea { width:100%; min-height:80px; padding:8px 10px; border:1px solid var(--border); border-radius:var(--radius-sm); font-size:13.5px; font-family:inherit; color:var(--text-primary); background:var(--bg); outline:none; resize:vertical; transition:border-color .15s; line-height:1.6; }
+        .modal-textarea:focus { border-color:var(--accent); background:white; }
+        .modal-select { width:100%; padding:8px 10px; border:1px solid var(--border); border-radius:var(--radius-sm); font-size:13.5px; font-family:inherit; color:var(--text-primary); background:var(--bg); outline:none; cursor:pointer; }
+        .modal-footer { display:flex; justify-content:flex-end; gap:8px; margin-top:20px; padding-top:16px; border-top:1px solid var(--border); }
+
+        #globalModal .modal { width:440px; }
+
+        /* ═══ DETAIL MODAL ═══ */
+        #detailModal .modal { width:560px; max-height:calc(100vh - 80px); overflow-y:auto; padding:0; }
+        .detail-header { padding:20px 24px 16px; border-bottom:1px solid var(--border); position:sticky; top:0; background:var(--surface); z-index:1; display:flex; align-items:flex-start; gap:10px; }
+        .detail-header-main { flex:1; min-width:0; }
+        .detail-label-row { margin-bottom:8px; display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+        .detail-title-display { font-size:16px; font-weight:600; line-height:1.4; cursor:text; padding:2px 4px; margin:-2px -4px; border-radius:4px; transition:background .1s; word-break:break-word; }
+        .detail-title-display:hover { background:var(--bg); }
+        .detail-title-input { font-size:16px; font-weight:600; line-height:1.4; border:1.5px solid var(--accent); border-radius:6px; padding:4px 8px; width:100%; font-family:inherit; outline:none; background:var(--accent-light); display:none; }
+        .detail-body { padding:20px 24px; }
+        .detail-section { margin-bottom:22px; }
+        .detail-section-label { font-size:11px; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:.5px; margin-bottom:8px; }
+        .detail-note-display { font-size:13.5px; color:var(--text-secondary); line-height:1.65; cursor:text; padding:6px 8px; margin:-6px -8px; border-radius:var(--radius-sm); min-height:36px; transition:background .1s; white-space:pre-wrap; word-break:break-word; }
+        .detail-note-display:hover { background:var(--bg); }
+        .detail-note-display.empty { color:var(--text-muted); font-style:italic; }
+        .detail-note-input { width:100%; min-height:100px; padding:6px 8px; border:1.5px solid var(--accent); border-radius:var(--radius-sm); font-size:13.5px; font-family:inherit; color:var(--text-primary); background:var(--accent-light); outline:none; resize:vertical; line-height:1.65; display:none; }
+        .detail-meta-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+        .detail-meta-item { display:flex; flex-direction:column; gap:4px; }
+        .detail-meta-label { font-size:11px; color:var(--text-muted); font-weight:500; }
+        .detail-meta-select { padding:6px 8px; border:1px solid var(--border); border-radius:var(--radius-sm); font-size:13px; font-family:inherit; color:var(--text-primary); background:var(--bg); outline:none; cursor:pointer; transition:border-color .15s; }
+        .detail-meta-select:focus { border-color:var(--accent); }
+
+        .subtask-list { display:flex; flex-direction:column; gap:4px; }
+        .subtask-item { display:flex; align-items:center; gap:8px; padding:5px 6px; border-radius:var(--radius-sm); transition:background .1s; }
+        .subtask-item:hover { background:var(--bg); }
+        .subtask-item:hover .subtask-del { opacity:1; }
+        .subtask-text { font-size:13px; color:var(--text-secondary); flex:1; }
+        .subtask-text.done { text-decoration:line-through; color:var(--text-muted); }
+        .subtask-del { width:20px; height:20px; border:none; background:none; cursor:pointer; border-radius:3px; color:var(--text-muted); display:flex; align-items:center; justify-content:center; opacity:0; transition:opacity .15s,background .1s; }
+        .subtask-del:hover { background:#fee2e2; color:#dc2626; }
+        .subtask-del * { pointer-events:none; }
+        .add-subtask-row { display:flex; gap:6px; margin-top:6px; }
+        .add-subtask-input { flex:1; padding:5px 8px; border:1px solid var(--border); border-radius:var(--radius-sm); font-size:12.5px; font-family:inherit; outline:none; background:var(--bg); transition:border-color .15s; }
+        .add-subtask-input:focus { border-color:var(--accent); background:white; }
+        .add-subtask-btn { height:30px; padding:0 12px; background:var(--accent); color:white; border:none; border-radius:var(--radius-sm); font-size:12px; font-family:inherit; cursor:pointer; white-space:nowrap; transition:background .15s; }
+        .add-subtask-btn:hover { background:#1d4ed8; }
+
+        .detail-footer { padding:14px 24px; border-top:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; position:sticky; bottom:0; background:var(--surface); }
+        .btn-danger { height:32px; padding:0 14px; background:none; color:#dc2626; border:1px solid #fca5a5; border-radius:var(--radius-sm); font-size:13px; font-family:inherit; cursor:pointer; transition:background .15s; }
+        .btn-danger:hover { background:#fee2e2; }
+        .btn-save { height:32px; padding:0 16px; background:var(--accent); color:white; border:none; border-radius:var(--radius-sm); font-size:13px; font-family:inherit; font-weight:500; cursor:pointer; transition:background .15s; }
+        .btn-save:hover { background:#1d4ed8; }
+
+        /* ── ctx menu ── */
+        .ctx-menu { position:fixed; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-md); box-shadow:0 8px 24px rgba(0,0,0,.1); padding:4px; z-index:999; min-width:160px; display:none; }
+        .ctx-menu.show { display:block; }
+        .ctx-item { display:flex; align-items:center; gap:8px; padding:7px 10px; font-size:13px; cursor:pointer; border-radius:6px; color:var(--text-primary); transition:background .1s; }
+        .ctx-item * { pointer-events:none; }
+        .ctx-item:hover { background:var(--bg); }
+        .ctx-item.danger { color:#dc2626; }
+        .ctx-item.danger:hover { background:#fee2e2; }
+        .ctx-sep { height:1px; background:var(--border); margin:4px 0; }
+    </style>
+</head>
+<body>
+
+<nav class="topnav">
+    <span class="topnav-logo">TaskBoard</span>
+    <div class="topnav-sep"></div>
+    <span class="topnav-page">プロジェクト管理</span>
+    <div class="topnav-actions">
+        <button class="nav-btn" id="filterBtn">
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M2 4h12M4 8h8M6 12h4"/></svg>
+            フィルター
+        </button>
+        <button class="nav-btn primary" id="globalAddBtn">
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 1v10M1 6h10"/></svg>
+            タスクを追加
+        </button>
+    </div>
+</nav>
+
+<div class="board-wrap" id="board"></div>
+
+<!-- Filter Panel -->
+<div class="filter-panel" id="filterPanel">
+    <div class="fp-header">
+        <span class="fp-title">フィルター</span>
+        <button class="modal-close" id="filterClose">×</button>
+    </div>
+    <div class="fp-body">
+        <div class="fp-section">
+            <div class="fp-section-title">
+                ラベル
+                <button class="filter-add-btn" id="addLabelBtn">＋ 追加</button>
+            </div>
+            <!-- new label editor -->
+            <div class="lbl-editor" id="newLabelEditor">
+                <div class="lbl-editor-row">
+                    <input type="text" class="lbl-name-input" id="newLabelName" placeholder="ラベル名..." maxlength="20">
+                </div>
+                <div class="color-swatches" id="newLabelSwatches"></div>
+                <div class="lbl-editor-actions">
+                    <button class="btn-cancel" style="height:26px;font-size:12px" id="cancelNewLabel">キャンセル</button>
+                    <button class="btn-confirm" style="height:26px;font-size:12px" id="saveNewLabel">追加</button>
+                </div>
+            </div>
+            <div id="filterLabelList"></div>
+        </div>
+        <div class="fp-section">
+            <div class="fp-section-title">ステータス</div>
+            <div class="fp-status-item" id="fchk-active-row">
+                <div class="filter-checkbox" id="fchk-active"></div>
+                <span>進行中のみ</span>
+            </div>
+            <div class="fp-status-item" id="fchk-done-row">
+                <div class="filter-checkbox" id="fchk-done"></div>
+                <span>完了済みのみ</span>
+            </div>
+        </div>
+    </div>
+    <div class="fp-footer">
+        <button class="filter-clear" id="filterClearBtn">フィルターをクリア</button>
+    </div>
+</div>
+
+<!-- Global Add Modal -->
+<div class="modal-overlay" id="globalModal">
+    <div class="modal">
+        <div class="modal-header">
+            <span class="modal-title">タスクを追加</span>
+            <button class="modal-close" id="modalClose">×</button>
+        </div>
+        <div class="modal-field"><label>タスク名 *</label><input type="text" class="modal-input" id="modalTitle" placeholder="タスク名を入力..."></div>
+        <div class="modal-field"><label>メモ</label><textarea class="modal-textarea" id="modalNote" placeholder="説明や補足を入力..."></textarea></div>
+        <div style="display:flex;gap:10px">
+            <div class="modal-field" style="flex:1"><label>ラベル</label><select class="modal-select" id="modalLabel"></select></div>
+            <div class="modal-field" style="flex:1"><label>追加先の列</label><select class="modal-select" id="modalCol"></select></div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn-cancel" id="modalCancelBtn">キャンセル</button>
+            <button class="btn-confirm" id="modalConfirmBtn">追加する</button>
+        </div>
+    </div>
+</div>
+
+<!-- Detail Modal -->
+<div class="modal-overlay" id="detailModal">
+    <div class="modal">
+        <div class="detail-header">
+            <div class="detail-header-main">
+                <div class="detail-label-row" id="detailLabelRow"></div>
+                <div class="detail-title-display" id="detailTitleDisplay"></div>
+                <input type="text" class="detail-title-input" id="detailTitleInput">
+            </div>
+            <button class="modal-close" id="detailClose">×</button>
+        </div>
+        <div class="detail-body">
+            <div class="detail-section">
+                <div class="detail-section-label">メモ</div>
+                <div class="detail-note-display empty" id="detailNoteDisplay">クリックしてメモを追加...</div>
+                <textarea class="detail-note-input" id="detailNoteInput"></textarea>
+            </div>
+            <div class="detail-section">
+                <div class="detail-section-label">プロパティ</div>
+                <div class="detail-meta-grid">
+                    <div class="detail-meta-item"><span class="detail-meta-label">ラベル</span><select class="detail-meta-select" id="detailLabelSelect"></select></div>
+                    <div class="detail-meta-item"><span class="detail-meta-label">列</span><select class="detail-meta-select" id="detailColSelect"></select></div>
+                </div>
+            </div>
+            <div class="detail-section">
+                <div class="detail-section-label">サブタスク</div>
+                <div class="subtask-list" id="detailSubtaskList"></div>
+                <div class="add-subtask-row">
+                    <input type="text" class="add-subtask-input" id="detailSubInput" placeholder="サブタスクを追加...">
+                    <button class="add-subtask-btn" id="detailSubAddBtn">追加</button>
+                </div>
+            </div>
+        </div>
+        <div class="detail-footer">
+            <button class="btn-danger" id="detailDeleteBtn">削除</button>
+            <div style="display:flex;gap:8px">
+                <button class="btn-cancel" id="detailCancelBtn">閉じる</button>
+                <button class="btn-save" id="detailSaveBtn">保存する</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Context Menu -->
+<div class="ctx-menu" id="ctxMenu">
+    <div class="ctx-item" data-action="detail">
+        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2" y="2" width="12" height="12" rx="2"/><path d="M5 6h6M5 9h4"/></svg>
+        詳細・編集
+    </div>
+    <div class="ctx-sep"></div>
+    <div class="ctx-item danger" data-action="delete">
+        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 4h10M5 4V2h6v2M5 7v5M8 7v5M11 7v5M4 4l1 10h6l1-10"/></svg>
+        削除
+    </div>
+</div>
+
+<script>
+// ═══════════════════════════ DATA ═══════════════════════════
+
+const PALETTE = [
+    {bg:'#dbeafe',fg:'#1d4ed8'},{bg:'#fee2e2',fg:'#dc2626'},{bg:'#dcfce7',fg:'#16a34a'},
+    {bg:'#ffedd5',fg:'#ea580c'},{bg:'#f3e8ff',fg:'#9333ea'},{bg:'#f1f5f9',fg:'#475569'},
+    {bg:'#fef9c3',fg:'#a16207'},{bg:'#fce7f3',fg:'#be185d'},{bg:'#ccfbf1',fg:'#0f766e'},
+];
+
+function loadData() {
+    const s = localStorage.getItem('kb_v4');
+    if (s) return JSON.parse(s);
+    return {
+        labels: [
+            {id:'internal',name:'内部向けタスク',ci:0},
+            {id:'auto',name:'自動車物流タスク',ci:1},
+            {id:'external',name:'外部向けタスク',ci:2},
+            {id:'urgent',name:'緊急',ci:3},
+            {id:'none',name:'ラベルなし',ci:5},
+        ],
+        columns:[
+            {id:'backlog',title:'バックログ',tasks:[
+                {id:'t1',title:'R8年度追加対象手続き関連対応',note:'KPMG様からの連絡待ち',label:'auto',done:false,subtasks:[]},
+                {id:'t2',title:'外来生物DBS_課題対応',note:'',label:'internal',done:false,subtasks:[]},
+            ]},
+            {id:'inprogress',title:'進行中',tasks:[
+                {id:'t3',title:'外来生物DBS_テストクラスの修正',note:'',label:'internal',done:false,subtasks:[]},
+                {id:'t4',title:'マニュアル作成',note:'各種ツールの改修・マニュアル作成等。\n各担当者に作業範囲を確認してから進める予定。\nスケジュールは来月末を目標にしている。詳細は別途共有します。',label:'internal',done:false,subtasks:[]},
+                {id:'t5',title:'入札関連対応',note:'',label:'internal',done:false,subtasks:[{id:'s1',title:'入札資料の読み込み',done:false}]},
+            ]},
+            {id:'repeat',title:'繰り返しタスク',tasks:[]},
+            {id:'done',title:'完了',tasks:[]},
+        ]
+    };
+}
+
+let state = loadData();
+let filterLabels = new Set();
+let filterStatus = '';
+let detailTaskId = null;
+let newLabelCI   = 0;
+
+function save(){ localStorage.setItem('kb_v4', JSON.stringify(state)); }
+function uid(){ return 'id_'+Date.now()+Math.random().toString(36).slice(2,5); }
+function getLbl(id){ return state.labels.find(l=>l.id===id)||state.labels.find(l=>l.id==='none')||{name:'?',ci:5}; }
+function pc(ci){ return PALETTE[ci]||PALETTE[5]; }
+
+// ═══════════════════════════ RENDER ═══════════════════════════
+
+function labelTag(id, extra=''){
+    const l=getLbl(id); if(l.id==='none') return '';
+    const c=pc(l.ci);
+    return `<span class="task-label" style="background:${c.bg};color:${c.fg};${extra}">${l.name}</span>`;
+}
+
+function buildLblOpts(){
+    return state.labels.map(l=>`<option value="${l.id}">${l.name}</option>`).join('');
+}
+
+function matchFilter(t){
+    if(filterLabels.size>0 && !filterLabels.has(t.label)) return false;
+    if(filterStatus==='active' && t.done) return false;
+    if(filterStatus==='done' && !t.done) return false;
+    return true;
+}
+
+function renderSubSummary(task){
+    if(!task.subtasks.length) return '';
+    const done=task.subtasks.filter(s=>s.done).length;
+    const pct=Math.round(done/task.subtasks.length*100);
+    const rows=task.subtasks.map(s=>`
+        <div style="display:flex;align-items:center;gap:6px;padding:4px 0 0 24px">
+            <div class="task-checkbox ${s.done?'checked':''}" data-action="toggle-sub" data-task="${task.id}" data-sub="${s.id}"></div>
+            <span style="font-size:12.5px;color:var(--text-secondary);${s.done?'text-decoration:line-through;color:var(--text-muted)':''}">${s.title}</span>
+        </div>`).join('');
+    return `<div class="task-subtasks">
+        <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" style="pointer-events:none"><path d="M3 5h10M3 8h7M3 11h5"/></svg>
+        <div class="subtask-progress"><div class="subtask-bar"><div class="subtask-bar-fill" style="width:${pct}%"></div></div>${done}/${task.subtasks.length}</div>
+    </div>${rows}`;
+}
+
+const NOTE_LIMIT = 55;
+
+function renderTask(task){
+    const noteHtml = task.note ? `
+        <div class="task-note-wrap">
+            <div class="task-note">${task.note}</div>
+            ${task.note.length > NOTE_LIMIT
+                ? `<button class="task-note-more" data-action="open-detail" data-id="${task.id}">詳細を見る →</button>`
+                : ''}
+        </div>` : '';
+    return `
+    <div class="task-card" data-id="${task.id}">
+        ${labelTag(task.label)}
+        <div class="task-top-row">
+            <div class="task-checkbox ${task.done?'checked':''}" data-action="toggle-task" data-id="${task.id}"></div>
+            <span class="task-title ${task.done?'done':''}">${task.title}</span>
+        </div>
+        ${noteHtml}
+        ${renderSubSummary(task)}
+        <div class="task-actions">
+            <button class="task-action-btn" data-action="open-detail" data-id="${task.id}" title="詳細・編集">
+                <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2" y="2" width="12" height="12" rx="2"/><path d="M5 6h6M5 9h4"/></svg>
+            </button>
+            <button class="task-action-btn danger" data-action="delete-task" data-id="${task.id}" title="削除">
+                <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 4h10M5 4V2h6v2M5 7v5M8 7v5M11 7v5M4 4l1 10h6l1-10"/></svg>
+            </button>
+        </div>
+    </div>`;
+}
+
+function renderCol(col){
+    const all=col.tasks.filter(matchFilter);
+    const active=all.filter(t=>!t.done);
+    const done=all.filter(t=>t.done);
+    const isF=filterLabels.size>0||filterStatus!=='';
+    const lblOpts=buildLblOpts();
+    return `
+    <div class="column" data-col="${col.id}">
+        <div class="col-header">
+            <span class="col-title">${col.title}</span>
+            <span class="col-count">${isF?`${all.length}/${col.tasks.length}`:col.tasks.length}</span>
+            <button class="col-menu-btn" data-action="col-menu" data-col="${col.id}">
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><circle cx="8" cy="3" r="1.2"/><circle cx="8" cy="8" r="1.2"/><circle cx="8" cy="13" r="1.2"/></svg>
+            </button>
+        </div>
+        <button class="add-task-top" data-action="open-add" data-col="${col.id}">
+            <svg width="13" height="13" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 1v10M1 6h10"/></svg>
+            タスクを追加
+        </button>
+        <div class="add-form" id="form-${col.id}">
+            <textarea class="add-form-input" rows="2" placeholder="タスク名を入力..." id="inp-${col.id}"></textarea>
+            <div class="add-form-row">
+                <select class="label-select" id="lbl-${col.id}">${lblOpts}</select>
+                <div class="form-actions">
+                    <button class="btn-cancel" data-action="cancel-add" data-col="${col.id}">キャンセル</button>
+                    <button class="btn-confirm" data-action="confirm-add" data-col="${col.id}">追加</button>
+                </div>
+            </div>
+        </div>
+        <div class="tasks-list" data-col="${col.id}">${active.map(renderTask).join('')}</div>
+        ${done.length ? `
+        <div class="completed-row" data-action="toggle-done" data-col="${col.id}">
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="8" cy="8" r="6"/><path d="M5 8l2 2 4-4"/></svg>
+            完了済みタスク
+            <span class="completed-count">${done.length}</span>
+            <svg class="completed-chevron ${col._doneOpen?'open':''}" width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 4l4 4 4-4"/></svg>
+        </div>
+        ${col._doneOpen?`<div class="tasks-list" style="margin-top:4px">${done.map(renderTask).join('')}</div>`:''}
+        `:''}
+    </div>`;
+}
+
+function render(){
+    document.getElementById('board').innerHTML =
+        state.columns.map(renderCol).join('') +
+        `<button class="add-col-btn" data-action="add-col">
+            <svg width="13" height="13" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 1v10M1 6h10"/></svg>列を追加
+        </button>`;
+    const isF=filterLabels.size>0||filterStatus!=='';
+    filterBtn.style.borderColor=isF?'var(--accent)':'';
+    filterBtn.style.color=isF?'var(--accent)':'';
+    initDrag();
+}
+
+// ═══════════════════════════ DRAG ═══════════════════════════
+function initDrag(){
+    document.querySelectorAll('.tasks-list').forEach(list=>{
+        if(list._sortable) list._sortable.destroy();
+        list._sortable=new Sortable(list,{
+            group:'kanban',animation:180,ghostClass:'sortable-ghost',chosenClass:'sortable-chosen',
+            onEnd(evt){
+                if(evt.from===evt.to&&evt.oldIndex===evt.newIndex) return;
+                const tid=evt.item.dataset.id;
+                const fc=state.columns.find(c=>c.id===evt.from.dataset.col);
+                const tc=state.columns.find(c=>c.id===evt.to.dataset.col);
+                if(!fc||!tc) return;
+                const i=fc.tasks.findIndex(t=>t.id===tid); if(i===-1) return;
+                const [task]=fc.tasks.splice(i,1);
+                const act=[...tc.tasks.filter(t=>!t.done)];
+                act.splice(evt.newIndex,0,task);
+                tc.tasks=[...act,...tc.tasks.filter(t=>t.done&&t.id!==tid)];
+                save(); render();
+            }
+        });
+    });
+}
+
+// ═══════════════════════════ FILTER PANEL ═══════════════════════════
+const filterPanel=document.getElementById('filterPanel');
+const filterBtn=document.getElementById('filterBtn');
+
+filterBtn.addEventListener('click',()=>{
+    filterPanel.classList.toggle('open');
+    if(filterPanel.classList.contains('open')) renderFP();
+});
+document.getElementById('filterClose').addEventListener('click',()=>filterPanel.classList.remove('open'));
+
+function renderFP(){
+    const list=document.getElementById('filterLabelList');
+    list.innerHTML=state.labels.map(lbl=>{
+        const c=pc(lbl.ci);
+        return `
+        <div class="filter-label-row">
+            <div class="filter-checkbox ${filterLabels.has(lbl.id)?'on':''}" data-action="toggle-filter-label" data-lid="${lbl.id}"></div>
+            <span class="task-label" style="background:${c.bg};color:${c.fg};cursor:default;pointer-events:none;margin-bottom:0">${lbl.name}</span>
+            <div class="lbl-edit-btns">
+                <button class="lbl-edit-btn" data-action="toggle-edit-label" data-lid="${lbl.id}" title="編集">
+                    <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M11 2l3 3-9 9H2v-3L11 2z"/></svg>
+                </button>
+                ${lbl.id!=='none'?`
+                <button class="lbl-edit-btn del" data-action="delete-label" data-lid="${lbl.id}" title="削除">
+                    <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 4h10M5 4V2h6v2M5 7v5M8 7v5M11 7v5M4 4l1 10h6l1-10"/></svg>
+                </button>`:''}
+            </div>
+        </div>
+        <div class="lbl-editor" id="ed-${lbl.id}">
+            <div class="lbl-editor-row">
+                <input type="text" class="lbl-name-input" id="edname-${lbl.id}" value="${lbl.name}" maxlength="20">
+            </div>
+            <div class="color-swatches" id="edsw-${lbl.id}"></div>
+            <div class="lbl-editor-actions">
+                <button class="btn-cancel" style="height:26px;font-size:12px" data-action="cancel-edit-label" data-lid="${lbl.id}">キャンセル</button>
+                <button class="btn-confirm" style="height:26px;font-size:12px" data-action="save-edit-label" data-lid="${lbl.id}">保存</button>
+            </div>
+        </div>`;
+    }).join('');
+
+    state.labels.forEach(lbl=>buildSwatches(`edsw-${lbl.id}`,lbl.ci));
+    buildSwatches('newLabelSwatches', newLabelCI);
+
+    document.getElementById('fchk-active').className='filter-checkbox'+(filterStatus==='active'?' on':'');
+    document.getElementById('fchk-done').className='filter-checkbox'+(filterStatus==='done'?' on':'');
+}
+
+function buildSwatches(containerId, selIdx){
+    const el=document.getElementById(containerId); if(!el) return;
+    el.innerHTML=PALETTE.map((c,i)=>
+        `<div class="color-swatch ${i===selIdx?'sel':''}" style="background:${c.bg}" data-action="pick-color" data-cid="${containerId}" data-ci="${i}"></div>`
+    ).join('');
+}
+
+// ── New label ──
+document.getElementById('addLabelBtn').addEventListener('click',()=>{
+    document.getElementById('newLabelEditor').classList.toggle('open');
+    document.getElementById('newLabelName').focus();
+});
+document.getElementById('cancelNewLabel').addEventListener('click',()=>{
+    document.getElementById('newLabelEditor').classList.remove('open');
+    document.getElementById('newLabelName').value='';
+});
+document.getElementById('saveNewLabel').addEventListener('click',doSaveNewLabel);
+document.getElementById('newLabelName').addEventListener('keydown',e=>{ if(e.key==='Enter'){e.preventDefault();doSaveNewLabel();} });
+function doSaveNewLabel(){
+    const name=document.getElementById('newLabelName').value.trim();
+    if(!name){document.getElementById('newLabelName').focus();return;}
+    const insertIdx=state.labels.findIndex(l=>l.id==='none');
+    state.labels.splice(insertIdx>=0?insertIdx:state.labels.length,0,{id:uid(),name,ci:newLabelCI});
+    document.getElementById('newLabelName').value='';
+    document.getElementById('newLabelEditor').classList.remove('open');
+    newLabelCI=0;
+    save(); render(); renderFP();
+}
+
+// ── Filter label list delegation ──
+document.getElementById('filterLabelList').addEventListener('click',e=>{
+    const el=e.target.closest('[data-action]'); if(!el) return;
+    const act=el.dataset.action, lid=el.dataset.lid;
+    if(act==='toggle-filter-label'){
+        filterLabels.has(lid)?filterLabels.delete(lid):filterLabels.add(lid);
+        render(); renderFP();
+    }
+    else if(act==='toggle-edit-label'){
+        document.querySelectorAll('.lbl-editor').forEach(r=>{ if(r.id!=='ed-'+lid&&r.id!=='newLabelEditor') r.classList.remove('open'); });
+        const ed=document.getElementById('ed-'+lid);
+        ed.classList.toggle('open');
+        if(ed.classList.contains('open')){
+            const lbl=state.labels.find(l=>l.id===lid);
+            buildSwatches(`edsw-${lid}`,lbl.ci);
+            document.getElementById(`edname-${lid}`)?.focus();
+        }
+    }
+    else if(act==='cancel-edit-label'){
+        document.getElementById('ed-'+lid)?.classList.remove('open');
+    }
+    else if(act==='save-edit-label'){
+        const nameEl=document.getElementById(`edname-${lid}`);
+        const name=nameEl?.value.trim();
+        if(!name){nameEl?.focus();return;}
+        const lbl=state.labels.find(l=>l.id===lid);
+        if(lbl){
+            lbl.name=name;
+            const sel=document.querySelector(`#edsw-${lid} .color-swatch.sel`);
+            if(sel) lbl.ci=parseInt(sel.dataset.ci);
+        }
+        document.getElementById('ed-'+lid)?.classList.remove('open');
+        save(); render(); renderFP();
+    }
+    else if(act==='delete-label'){
+        if(!confirm('このラベルを削除しますか？')) return;
+        state.labels=state.labels.filter(l=>l.id!==lid);
+        state.columns.forEach(c=>c.tasks.forEach(t=>{if(t.label===lid)t.label='none';}));
+        filterLabels.delete(lid);
+        save(); render(); renderFP();
+    }
+    else if(act==='pick-color'){
+        const ci=parseInt(el.dataset.ci);
+        const cid=el.dataset.cid;
+        // update swatch UI
+        const container=el.closest('.color-swatches');
+        container.querySelectorAll('.color-swatch').forEach((s,i)=>{
+            s.classList.toggle('sel',i===ci);
+        });
+        if(cid==='newLabelSwatches') newLabelCI=ci;
+    }
+});
+
+document.getElementById('fchk-active-row').addEventListener('click',()=>{ filterStatus=filterStatus==='active'?'':'active'; render();renderFP(); });
+document.getElementById('fchk-done-row').addEventListener('click',()=>{ filterStatus=filterStatus==='done'?'':'done'; render();renderFP(); });
+document.getElementById('filterClearBtn').addEventListener('click',()=>{ filterLabels.clear();filterStatus=''; render();renderFP(); });
+
+// ═══════════════════════════ GLOBAL ADD ═══════════════════════════
+const globalModal=document.getElementById('globalModal');
+function openGlobalAdd(){
+    document.getElementById('modalLabel').innerHTML=buildLblOpts();
+    document.getElementById('modalCol').innerHTML=state.columns.map(c=>`<option value="${c.id}">${c.title}</option>`).join('');
+    document.getElementById('modalTitle').value='';
+    document.getElementById('modalNote').value='';
+    globalModal.classList.add('open');
+    setTimeout(()=>document.getElementById('modalTitle').focus(),50);
+}
+function closeGlobalAdd(){ globalModal.classList.remove('open'); }
+document.getElementById('globalAddBtn').addEventListener('click',openGlobalAdd);
+document.getElementById('modalClose').addEventListener('click',closeGlobalAdd);
+document.getElementById('modalCancelBtn').addEventListener('click',closeGlobalAdd);
+globalModal.addEventListener('click',e=>{ if(e.target===globalModal) closeGlobalAdd(); });
+document.getElementById('modalConfirmBtn').addEventListener('click',()=>{
+    const title=document.getElementById('modalTitle').value.trim();
+    if(!title){document.getElementById('modalTitle').focus();return;}
+    const col=state.columns.find(c=>c.id===document.getElementById('modalCol').value);
+    if(!col) return;
+    col.tasks.unshift({id:uid(),title,note:document.getElementById('modalNote').value.trim(),label:document.getElementById('modalLabel').value||'none',done:false,subtasks:[]});
+    save();render();closeGlobalAdd();
+});
+
+// ═══════════════════════════ DETAIL MODAL ═══════════════════════════
+const detailModal=document.getElementById('detailModal');
+
+function findTask(id){
+    for(const col of state.columns){
+        const t=col.tasks.find(t=>t.id===id);
+        if(t) return {task:t,col};
+    }
+    return null;
+}
+
+function openDetail(taskId){
+    const found=findTask(taskId); if(!found) return;
+    detailTaskId=taskId;
+    const t=found.task;
+
+    document.getElementById('detailLabelRow').innerHTML=labelTag(t.label,'margin-bottom:0');
+    const disp=document.getElementById('detailTitleDisplay');
+    disp.textContent=t.title; disp.style.display='';
+    const inp=document.getElementById('detailTitleInput');
+    inp.style.display='none'; inp.value=t.title;
+
+    const nd=document.getElementById('detailNoteDisplay');
+    const ni=document.getElementById('detailNoteInput');
+    ni.style.display='none';
+    if(t.note){ nd.textContent=t.note; nd.classList.remove('empty'); nd.style.display=''; }
+    else { nd.textContent='クリックしてメモを追加...'; nd.classList.add('empty'); nd.style.display=''; }
+    ni.value=t.note||'';
+
+    document.getElementById('detailLabelSelect').innerHTML=buildLblOpts();
+    document.getElementById('detailLabelSelect').value=t.label;
+    document.getElementById('detailColSelect').innerHTML=state.columns.map(c=>`<option value="${c.id}">${c.title}</option>`).join('');
+    document.getElementById('detailColSelect').value=found.col.id;
+
+    renderDetailSubs();
+    document.getElementById('detailSubInput').value='';
+    detailModal.classList.add('open');
+}
+
+function renderDetailSubs(){
+    const found=findTask(detailTaskId); if(!found) return;
+    const list=document.getElementById('detailSubtaskList');
+    const subs=found.task.subtasks;
+    list.innerHTML=subs.length?subs.map(s=>`
+        <div class="subtask-item">
+            <div class="task-checkbox ${s.done?'checked':''}" data-action="toggle-sub" data-task="${found.task.id}" data-sub="${s.id}"></div>
+            <span class="subtask-text ${s.done?'done':''}">${s.title}</span>
+            <button class="subtask-del" data-action="del-sub" data-sid="${s.id}">
+                <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M2 2l8 8M10 2l-8 8"/></svg>
+            </button>
+        </div>`).join('')
+    :`<div style="font-size:12.5px;color:var(--text-muted);padding:4px 6px">サブタスクなし</div>`;
+}
+
+function closeDetail(){ detailModal.classList.remove('open'); detailTaskId=null; }
+
+function saveDetail(){
+    const found=findTask(detailTaskId); if(!found) return;
+    const t=found.task;
+    // title
+    const ti=document.getElementById('detailTitleInput');
+    const td=document.getElementById('detailTitleDisplay');
+    const newTitle=(ti.style.display!=='none'?ti.value:td.textContent).trim();
+    if(newTitle) t.title=newTitle;
+    // note
+    const ni=document.getElementById('detailNoteInput');
+    if(ni.style.display!=='none') t.note=ni.value.trim();
+    else {
+        const nd=document.getElementById('detailNoteDisplay');
+        if(!nd.classList.contains('empty')) t.note=nd.textContent;
+    }
+    // label
+    t.label=document.getElementById('detailLabelSelect').value;
+    // column move
+    const newColId=document.getElementById('detailColSelect').value;
+    if(newColId!==found.col.id){
+        found.col.tasks=found.col.tasks.filter(x=>x.id!==t.id);
+        const nc=state.columns.find(c=>c.id===newColId);
+        if(nc) nc.tasks.unshift(t);
+    }
+    save(); render(); closeDetail();
+}
+
+// Title inline edit
+document.getElementById('detailTitleDisplay').addEventListener('click',()=>{
+    document.getElementById('detailTitleDisplay').style.display='none';
+    const i=document.getElementById('detailTitleInput');
+    i.style.display=''; i.focus(); i.select();
+});
+document.getElementById('detailTitleInput').addEventListener('blur',()=>{
+    const v=document.getElementById('detailTitleInput').value.trim();
+    if(v){ document.getElementById('detailTitleDisplay').textContent=v; }
+    document.getElementById('detailTitleDisplay').style.display='';
+    document.getElementById('detailTitleInput').style.display='none';
+});
+document.getElementById('detailTitleInput').addEventListener('keydown',e=>{ if(e.key==='Enter'){e.preventDefault();document.getElementById('detailTitleInput').blur();} });
+
+// Note inline edit
+document.getElementById('detailNoteDisplay').addEventListener('click',()=>{
+    document.getElementById('detailNoteDisplay').style.display='none';
+    const i=document.getElementById('detailNoteInput');
+    i.style.display=''; i.focus();
+});
+document.getElementById('detailNoteInput').addEventListener('blur',()=>{
+    const v=document.getElementById('detailNoteInput').value;
+    const nd=document.getElementById('detailNoteDisplay');
+    if(v.trim()){ nd.textContent=v; nd.classList.remove('empty'); }
+    else { nd.textContent='クリックしてメモを追加...'; nd.classList.add('empty'); }
+    nd.style.display=''; document.getElementById('detailNoteInput').style.display='none';
+});
+
+// label change → update header
+document.getElementById('detailLabelSelect').addEventListener('change',()=>{
+    document.getElementById('detailLabelRow').innerHTML=labelTag(document.getElementById('detailLabelSelect').value,'margin-bottom:0');
+});
+
+// subtask add
+document.getElementById('detailSubAddBtn').addEventListener('click',doAddSub);
+document.getElementById('detailSubInput').addEventListener('keydown',e=>{ if(e.key==='Enter'){e.preventDefault();doAddSub();} });
+function doAddSub(){
+    const i=document.getElementById('detailSubInput');
+    const title=i.value.trim(); if(!title) return;
+    const found=findTask(detailTaskId); if(!found) return;
+    found.task.subtasks.push({id:uid(),title,done:false});
+    i.value=''; save(); renderDetailSubs(); render();
+}
+
+// subtask list events
+document.getElementById('detailSubtaskList').addEventListener('click',e=>{
+    const el=e.target.closest('[data-action]'); if(!el) return;
+    const found=findTask(detailTaskId); if(!found) return;
+    if(el.dataset.action==='toggle-sub'){
+        const sub=found.task.subtasks.find(s=>s.id===el.dataset.sub);
+        if(sub){sub.done=!sub.done; save(); renderDetailSubs(); render();}
+    }
+    if(el.dataset.action==='del-sub'){
+        found.task.subtasks=found.task.subtasks.filter(s=>s.id!==el.dataset.sid);
+        save(); renderDetailSubs(); render();
+    }
+});
+
+document.getElementById('detailClose').addEventListener('click',closeDetail);
+document.getElementById('detailCancelBtn').addEventListener('click',closeDetail);
+document.getElementById('detailSaveBtn').addEventListener('click',saveDetail);
+document.getElementById('detailDeleteBtn').addEventListener('click',()=>{
+    if(!confirm('このタスクを削除しますか？')) return;
+    for(const col of state.columns) col.tasks=col.tasks.filter(t=>t.id!==detailTaskId);
+    save(); render(); closeDetail();
+});
+detailModal.addEventListener('click',e=>{ if(e.target===detailModal) closeDetail(); });
+
+// ═══════════════════════════ CTX MENU ═══════════════════════════
+let ctxTarget=null;
+const ctxMenu=document.getElementById('ctxMenu');
+function showCtx(e,tid){ e.preventDefault(); e.stopPropagation(); ctxTarget=tid;
+    ctxMenu.style.left=Math.min(e.clientX,innerWidth-180)+'px';
+    ctxMenu.style.top=Math.min(e.clientY,innerHeight-80)+'px';
+    ctxMenu.classList.add('show');
+}
+document.addEventListener('click',()=>ctxMenu.classList.remove('show'));
+ctxMenu.addEventListener('click',e=>{
+    const item=e.target.closest('.ctx-item'); if(!item||!ctxTarget) return;
+    if(item.dataset.action==='detail') openDetail(ctxTarget);
+    if(item.dataset.action==='delete'){ if(confirm('削除しますか？')){ for(const c of state.columns) c.tasks=c.tasks.filter(t=>t.id!==ctxTarget); save();render(); } }
+    ctxMenu.classList.remove('show');
+});
+
+// ═══════════════════════════ BOARD EVENTS ═══════════════════════════
+document.addEventListener('click',e=>{
+    const el=e.target.closest('[data-action]'); if(!el) return;
+    const act=el.dataset.action, colId=el.dataset.col, taskId=el.dataset.id;
+    if(act==='open-add'){
+        document.querySelectorAll('.add-form.active').forEach(f=>{ if(f.id!=='form-'+colId) f.classList.remove('active'); });
+        const f=document.getElementById('form-'+colId);
+        f.classList.toggle('active');
+        if(f.classList.contains('active')) setTimeout(()=>document.getElementById('inp-'+colId)?.focus(),50);
+    }
+    else if(act==='cancel-add'){ document.getElementById('form-'+colId)?.classList.remove('active'); }
+    else if(act==='confirm-add'){ doConfirmAdd(colId); }
+    else if(act==='toggle-task'){
+        const found=findTask(taskId); if(!found) return;
+        found.task.done=!found.task.done; save(); render();
+    }
+    else if(act==='toggle-sub'){
+        const found=findTask(el.dataset.task); if(!found) return;
+        const sub=found.task.subtasks.find(s=>s.id===el.dataset.sub);
+        if(sub){sub.done=!sub.done; save(); render();}
+    }
+    else if(act==='delete-task'){
+        e.stopPropagation();
+        if(confirm('このタスクを削除しますか？')){ for(const c of state.columns) c.tasks=c.tasks.filter(t=>t.id!==taskId); save();render(); }
+    }
+    else if(act==='open-detail'){ e.stopPropagation(); openDetail(taskId); }
+    else if(act==='toggle-done'){
+        const col=state.columns.find(c=>c.id===colId);
+        if(col){col._doneOpen=!col._doneOpen; render();}
+    }
+    else if(act==='add-col'){
+        const name=prompt('列名を入力:','新しい列');
+        if(name&&name.trim()){state.columns.push({id:uid(),title:name.trim(),tasks:[]});save();render();}
+    }
+    else if(act==='col-menu'){
+        const col=state.columns.find(c=>c.id===colId);
+        const name=prompt('列名を変更:',col?.title);
+        if(name&&name.trim()&&col){col.title=name.trim();save();render();}
+    }
+});
+
+document.addEventListener('contextmenu',e=>{
+    const card=e.target.closest('.task-card');
+    if(card) showCtx(e,card.dataset.id);
+});
+
+document.addEventListener('keydown',e=>{
+    if(e.key==='Escape'){ closeDetail(); closeGlobalAdd(); filterPanel.classList.remove('open'); document.querySelectorAll('.add-form.active').forEach(f=>f.classList.remove('active')); }
+    if(e.key==='Enter'&&!e.shiftKey&&e.target.classList.contains('add-form-input')){
+        e.preventDefault();
+        const colId=e.target.closest('.add-form')?.id?.replace('form-','');
+        if(colId) doConfirmAdd(colId);
+    }
+});
+
+function doConfirmAdd(colId){
+    const inp=document.getElementById('inp-'+colId);
+    const lbl=document.getElementById('lbl-'+colId);
+    const title=inp?.value.trim(); if(!title){inp?.focus();return;}
+    const col=state.columns.find(c=>c.id===colId); if(!col) return;
+    col.tasks.unshift({id:uid(),title,note:'',label:lbl?.value||'none',done:false,subtasks:[]});
+    save(); render();
+}
+
+render();
+</script>
+</body>
+</html>
