@@ -1392,6 +1392,18 @@
                 </svg>
                 ダウンロード
             </button>
+            <button class="nav-btn" id="backupBtn" title="データをバックアップ">
+                <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8">
+                    <path d="M3 10v2a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2v-2M8 12V6M11 9l-3 3-3-3"/>
+                </svg>
+                バックアップ
+            </button>
+            <button class="nav-btn" id="restoreBtn" title="バックアップから復元">
+                <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8">
+                    <path d="M2 8a6 6 0 1 0 12 0M8 4v4l3 2"/>
+                </svg>
+                復元
+            </button>
             <button class="nav-btn primary" id="globalAddBtn">
                 <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M6 1v10M1 6h10" />
@@ -1402,6 +1414,7 @@
     </nav>
 
     <div class="board-wrap" id="board"></div>
+    <input type="file" id="restoreFileInput" accept=".json" style="display:none">
 
     <!-- Filter Panel -->
     <div class="filter-panel" id="filterPanel">
@@ -1858,6 +1871,43 @@
             link.click();
         }
         document.getElementById('exportBtn').addEventListener('click', exportToCSV);
+
+        // ═══ BACKUP/RESTORE ═══
+        function backupToJSON() {
+            const backup = JSON.stringify(state, null, 2);
+            const blob = new Blob([backup], { type: 'application/json' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = `taskboard_backup_${new Date().toISOString().slice(0, 10)}.json`;
+            link.click();
+        }
+
+        document.getElementById('backupBtn').addEventListener('click', backupToJSON);
+
+        document.getElementById('restoreBtn').addEventListener('click', () => {
+            document.getElementById('restoreFileInput').click();
+        });
+
+        document.getElementById('restoreFileInput').addEventListener('change', (e) => {
+            const file = e.target.files[0]; if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (evt) => {
+                try {
+                    const restored = JSON.parse(evt.target.result);
+                    if (!restored.columns || !restored.labels) { alert('無効なバックアップファイルです'); return; }
+                    if (confirm('このバックアップから復元しますか？\\n現在のデータは上書きされます。')) {
+                        state = restored;
+                        save();
+                        render();
+                        alert('復元完了しました！');
+                    }
+                } catch (err) {
+                    alert('ファイル読み込みエラー：' + err.message);
+                }
+            };
+            reader.readAsText(file);
+            e.target.value = ''; // reset input
+        });
 
         // ═══ GLOBAL ADD ═══
         const globalModal = document.getElementById('globalModal');
