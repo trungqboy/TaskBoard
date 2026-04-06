@@ -1386,6 +1386,12 @@
                 </svg>
                 フィルター
             </button>
+            <button class="nav-btn" id="exportBtn" title="タスクをCSVでダウンロード">
+                <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8">
+                    <path d="M3 10v2a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2v-2M8 12V6M11 9l-3 3-3-3"/>
+                </svg>
+                ダウンロード
+            </button>
             <button class="nav-btn primary" id="globalAddBtn">
                 <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M6 1v10M1 6h10" />
@@ -1432,6 +1438,11 @@
                     <div class="filter-checkbox" id="fchk-done"></div>
                     <span>完了済みのみ</span>
                 </div>
+            </div>
+            <div class="fp-section">
+                <div class="fp-section-title">完了月（フィルター）</div>
+                <input type="month" id="monthFilter" style="width:100%;padding:6px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;font-size:13px;">
+                <small style="display:block;margin-top:4px;color:var(--text-muted)">完了した月で絞り込み</small>
             </div>
         </div>
         <div class="fp-footer">
@@ -1557,15 +1568,15 @@
                 columns: [
                     {
                         id: 'backlog', title: 'バックログ', tasks: [
-                            { id: 't1', title: 'R8年度追加対象手続き関連対応', note: 'KPMG様からの連絡待ち', label: 'auto', done: false, subtasks: [] },
-                            { id: 't2', title: '外来生物DBS_課題対応', note: '', label: 'internal', done: false, subtasks: [] },
+                            { id: 't1', title: 'R8年度追加対象手続き関連対応', note: 'KPMG様からの連絡待ち', label: 'auto', done: false, subtasks: [], createdDate: new Date().toISOString() },
+                            { id: 't2', title: '外来生物DBS_課題対応', note: '', label: 'internal', done: false, subtasks: [], createdDate: new Date().toISOString() },
                         ]
                     },
                     {
                         id: 'inprogress', title: '進行中', tasks: [
-                            { id: 't3', title: '外来生物DBS_テストクラスの修正', note: '', label: 'internal', done: false, subtasks: [] },
-                            { id: 't4', title: 'マニュアル作成', note: '各種ツールの改修・マニュアル作成等。\n各担当者に作業範囲を確認してから進める予定。\nスケジュールは来月末を目標にしている。詳細は別途共有します。', label: 'internal', done: false, subtasks: [] },
-                            { id: 't5', title: '入札関連対応', note: '', label: 'internal', done: false, subtasks: [{ id: 's1', title: '入札資料の読み込み', done: false }] },
+                            { id: 't3', title: '外来生物DBS_テストクラスの修正', note: '', label: 'internal', done: false, subtasks: [], createdDate: new Date().toISOString() },
+                            { id: 't4', title: 'マニュアル作成', note: '各種ツールの改修・マニュアル作成等。\n各担当者に作業範囲を確認してから進める予定。\nスケジュールは来月末を目標にしている。詳細は別途共有します。', label: 'internal', done: false, subtasks: [], createdDate: new Date().toISOString() },
+                            { id: 't5', title: '入札関連対応', note: '', label: 'internal', done: false, subtasks: [{ id: 's1', title: '入札資料の読み込み', done: false }], createdDate: new Date().toISOString() },
                         ]
                     },
                     { id: 'repeat', title: '繰り返しタスク', tasks: [] },
@@ -1577,6 +1588,7 @@
         let state = loadData();
         let filterLabels = new Set();
         let filterStatus = '';
+        let filterMonth = ''; // format: 'YYYY-MM'
         let detailTaskId = null;
         let newLabelCI = 0;
 
@@ -1597,6 +1609,11 @@
             if (filterLabels.size > 0 && !filterLabels.has(t.label)) return false;
             if (filterStatus === 'active' && t.done) return false;
             if (filterStatus === 'done' && !t.done) return false;
+            if (filterMonth && t.done) {
+                const cDate = new Date(t.completedDate || t.createdDate);
+                const cMonth = cDate.getFullYear() + '-' + String(cDate.getMonth() + 1).padStart(2, '0');
+                if (cMonth !== filterMonth) return false;
+            }
             return true;
         }
 
@@ -1754,6 +1771,7 @@
             buildSwatches('newLabelSwatches', newLabelCI);
             document.getElementById('fchk-active').className = 'filter-checkbox' + (filterStatus === 'active' ? ' on' : '');
             document.getElementById('fchk-done').className = 'filter-checkbox' + (filterStatus === 'done' ? ' on' : '');
+            document.getElementById('monthFilter').value = filterMonth;
         }
 
         function buildSwatches(containerId, selIdx) {
@@ -1807,7 +1825,39 @@
 
         document.getElementById('fchk-active-row').addEventListener('click', () => { filterStatus = filterStatus === 'active' ? '' : 'active'; render(); renderFP(); });
         document.getElementById('fchk-done-row').addEventListener('click', () => { filterStatus = filterStatus === 'done' ? '' : 'done'; render(); renderFP(); });
-        document.getElementById('filterClearBtn').addEventListener('click', () => { filterLabels.clear(); filterStatus = ''; render(); renderFP(); });
+        document.getElementById('filterClearBtn').addEventListener('click', () => { filterLabels.clear(); filterStatus = ''; filterMonth = ''; document.getElementById('monthFilter').value = ''; render(); renderFP(); });
+        document.getElementById('monthFilter').addEventListener('change', (e) => { filterMonth = e.target.value; render(); });
+
+        // ═══ EXPORT CSV ═══
+        function exportToCSV() {
+            const allTasks = [];
+            state.columns.forEach(col => {
+                col.tasks.forEach(t => {
+                    if (t.done) { // only export completed tasks
+                        const lbl = getLbl(t.label);
+                        const cDate = t.completedDate ? new Date(t.completedDate) : null;
+                        allTasks.push({
+                            タスク名: t.title,
+                            メモ: t.note,
+                            ラベル: lbl.name,
+                            完了日: cDate ? cDate.toLocaleDateString('ja-JP') : '',
+                            作成日: t.createdDate ? new Date(t.createdDate).toLocaleDateString('ja-JP') : ''
+                        });
+                    }
+                });
+            });
+            if (allTasks.length === 0) { alert('ダウンロードするタスクがありません'); return; }
+            const csv = [
+                Object.keys(allTasks[0]).join(','),
+                ...allTasks.map(t => [t.タスク名, t.メモ, t.ラベル, t.完了日, t.作成日].map(v => `"${String(v).replace(/"/g, '""')}"`).join(','))
+            ].join('\n');
+            const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = `tasks_${new Date().toISOString().slice(0, 10)}.csv`;
+            link.click();
+        }
+        document.getElementById('exportBtn').addEventListener('click', exportToCSV);
 
         // ═══ GLOBAL ADD ═══
         const globalModal = document.getElementById('globalModal');
@@ -1826,7 +1876,7 @@
             const title = document.getElementById('modalTitle').value.trim();
             if (!title) { document.getElementById('modalTitle').focus(); return; }
             const col = state.columns.find(c => c.id === document.getElementById('modalCol').value); if (!col) return;
-            col.tasks.unshift({ id: uid(), title, note: document.getElementById('modalNote').value.trim(), label: document.getElementById('modalLabel').value || 'none', done: false, subtasks: [] });
+            col.tasks.unshift({ id: uid(), title, note: document.getElementById('modalNote').value.trim(), label: document.getElementById('modalLabel').value || 'none', done: false, subtasks: [], createdDate: new Date().toISOString() });
             save(); render(); closeGlobalAdd();
         });
 
@@ -2069,7 +2119,13 @@
             else if (act === 'confirm-add') { doConfirmAdd(colId); }
             else if (act === 'toggle-task') {
                 const found = findTask(taskId); if (!found) return;
-                found.task.done = !found.task.done; save(); render();
+                found.task.done = !found.task.done;
+                if (found.task.done && !found.task.completedDate) {
+                    found.task.completedDate = new Date().toISOString();
+                } else if (!found.task.done) {
+                    found.task.completedDate = null;
+                }
+                save(); render();
             }
             else if (act === 'toggle-sub') {
                 const found = findTask(el.dataset.task); if (!found) return;
@@ -2114,7 +2170,7 @@
             const inp = document.getElementById('inp-' + colId), lbl = document.getElementById('lbl-' + colId);
             const title = inp?.value.trim(); if (!title) { inp?.focus(); return; }
             const col = state.columns.find(c => c.id === colId); if (!col) return;
-            col.tasks.unshift({ id: uid(), title, note: '', label: lbl?.value || 'none', done: false, subtasks: [] });
+            col.tasks.unshift({ id: uid(), title, note: '', label: lbl?.value || 'none', done: false, subtasks: [], createdDate: new Date().toISOString() });
             save(); render();
         }
 
