@@ -993,7 +993,6 @@
             flex-wrap: wrap;
         }
 
-        /* Title inline edit */
         .detail-title-wrap {
             position: relative;
         }
@@ -1069,7 +1068,6 @@
             margin-bottom: 22px;
         }
 
-        /* IMPORTANT: section-label always stays visible — never hidden */
         .detail-section-label {
             font-size: 11px;
             font-weight: 600;
@@ -1079,7 +1077,6 @@
             margin-bottom: 8px;
         }
 
-        /* Note inline edit — KEY FIX: container never collapses, only inner els toggle */
         .detail-note-display {
             font-size: 13.5px;
             color: var(--text-secondary);
@@ -1104,14 +1101,12 @@
             font-style: italic;
         }
 
-        /* hide display when editing */
         .detail-note-display.is-editing {
             display: none;
         }
 
         .detail-note-input {
             display: none;
-            /* hidden by default */
             width: 100%;
             min-height: 90px;
             padding: 8px 10px;
@@ -1321,6 +1316,7 @@
             background: #1d4ed8;
         }
 
+        /* CONTEXT MENUS (task + column share the same style) */
         .ctx-menu {
             position: fixed;
             background: var(--surface);
@@ -1508,7 +1504,6 @@
             </div>
             <div class="detail-body">
                 <div class="detail-section">
-                    <!-- ✅ FIX: section-label is OUTSIDE the toggled elements, always visible -->
                     <div class="detail-section-label">メモ</div>
                     <div class="detail-note-display placeholder" id="detailNoteDisplay">クリックしてメモを追加...</div>
                     <textarea class="detail-note-input" id="detailNoteInput" placeholder="メモを入力..."></textarea>
@@ -1542,7 +1537,7 @@
         </div>
     </div>
 
-    <!-- Context Menu -->
+    <!-- Task Context Menu -->
     <div class="ctx-menu" id="ctxMenu">
         <div class="ctx-item" data-action="detail">
             <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8">
@@ -1557,6 +1552,23 @@
                 <path d="M3 4h10M5 4V2h6v2M5 7v5M8 7v5M11 7v5M4 4l1 10h6l1-10" />
             </svg>
             削除
+        </div>
+    </div>
+
+    <!-- Column Context Menu (NEW) -->
+    <div class="ctx-menu" id="colCtxMenu">
+        <div class="ctx-item" data-col-action="rename">
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8">
+                <path d="M11 2l3 3-9 9H2v-3L11 2z" />
+            </svg>
+            列名を変更
+        </div>
+        <div class="ctx-sep"></div>
+        <div class="ctx-item danger" data-col-action="delete">
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8">
+                <path d="M3 4h10M5 4V2h6v2M5 7v5M8 7v5M11 7v5M4 4l1 10h6l1-10" />
+            </svg>
+            列を削除
         </div>
     </div>
 
@@ -1601,7 +1613,7 @@
         let state = loadData();
         let filterLabels = new Set();
         let filterStatus = '';
-        let filterMonth = ''; // format: 'YYYY-MM'
+        let filterMonth = '';
         let detailTaskId = null;
         let newLabelCI = 0;
 
@@ -1846,7 +1858,7 @@
             const allTasks = [];
             state.columns.forEach(col => {
                 col.tasks.forEach(t => {
-                    if (t.done) { // only export completed tasks
+                    if (t.done) {
                         const lbl = getLbl(t.label);
                         const cDate = t.completedDate ? new Date(t.completedDate) : null;
                         allTasks.push({
@@ -1895,7 +1907,7 @@
                 try {
                     const restored = JSON.parse(evt.target.result);
                     if (!restored.columns || !restored.labels) { alert('無効なバックアップファイルです'); return; }
-                    if (confirm('このバックアップから復元しますか？\\n現在のデータは上書きされます。')) {
+                    if (confirm('このバックアップから復元しますか？\n現在のデータは上書きされます。')) {
                         state = restored;
                         save();
                         render();
@@ -1906,7 +1918,7 @@
                 }
             };
             reader.readAsText(file);
-            e.target.value = ''; // reset input
+            e.target.value = '';
         });
 
         // ═══ GLOBAL ADD ═══
@@ -1938,8 +1950,6 @@
             return null;
         }
 
-        // ─── NOTE helpers ───
-        // Shows the display div, hides textarea
         function noteShowDisplay(text, isEmpty) {
             const nd = document.getElementById('detailNoteDisplay');
             const ni = document.getElementById('detailNoteInput');
@@ -1954,11 +1964,9 @@
             }
         }
 
-        // Shows textarea, hides display div — syncs current note value into textarea
         function noteShowEditor() {
             const nd = document.getElementById('detailNoteDisplay');
             const ni = document.getElementById('detailNoteInput');
-            // Read the current note from display (if it's a placeholder, use empty string)
             const currentNote = nd.classList.contains('placeholder') ? '' : nd.textContent;
             ni.value = currentNote;
             nd.classList.add('is-editing');
@@ -1967,14 +1975,12 @@
             ni.setSelectionRange(ni.value.length, ni.value.length);
         }
 
-        // Commit textarea → display
         function noteCommit() {
             const ni = document.getElementById('detailNoteInput');
             const val = ni.value;
             noteShowDisplay(val, val.trim() === '');
         }
 
-        // ─── TITLE helpers ───
         function titleShowDisplay(text) {
             const td = document.getElementById('detailTitleDisplay');
             const ti = document.getElementById('detailTitleInput');
@@ -1995,7 +2001,6 @@
         function titleCommit() {
             const ti = document.getElementById('detailTitleInput');
             const val = ti.value.trim();
-            // only update if non-empty
             const td = document.getElementById('detailTitleDisplay');
             if (val) td.textContent = val;
             ti.style.display = 'none';
@@ -2008,11 +2013,7 @@
             const t = found.task;
 
             document.getElementById('detailLabelRow').innerHTML = labelTag(t.label, 'margin-bottom:0');
-
-            // Title: always reset to display mode
             titleShowDisplay(t.title);
-
-            // Note: always reset to display mode with current note
             noteShowDisplay(t.note, !t.note);
 
             document.getElementById('detailLabelSelect').innerHTML = buildLblOpts();
@@ -2048,13 +2049,11 @@
             const found = findTask(detailTaskId); if (!found) return;
             const t = found.task;
 
-            // title
             const ti = document.getElementById('detailTitleInput');
             const td = document.getElementById('detailTitleDisplay');
             const newTitle = (ti.style.display !== 'none' ? ti.value : td.textContent).trim();
             if (newTitle) t.title = newTitle;
 
-            // note — read from textarea if editing, otherwise from display div
             const ni = document.getElementById('detailNoteInput');
             const nd = document.getElementById('detailNoteDisplay');
             if (ni.classList.contains('is-editing')) {
@@ -2072,7 +2071,6 @@
             save(); render(); closeDetail();
         }
 
-        // ── Title events ──
         document.getElementById('detailTitleDisplay').addEventListener('click', titleShowEditor);
         document.getElementById('titleEditBtn').addEventListener('click', titleShowEditor);
         document.getElementById('detailTitleInput').addEventListener('blur', titleCommit);
@@ -2080,19 +2078,14 @@
             if (e.key === 'Enter') { e.preventDefault(); titleCommit(); }
             if (e.key === 'Escape') {
                 e.preventDefault();
-                // restore original title
                 const found = findTask(detailTaskId);
                 if (found) document.getElementById('detailTitleInput').value = found.task.title;
                 titleCommit();
             }
         });
 
-        // ── Note events ──
-        // Click on the display area → open editor
         document.getElementById('detailNoteDisplay').addEventListener('click', noteShowEditor);
-        // Blur on textarea → commit (keeps content safe)
         document.getElementById('detailNoteInput').addEventListener('blur', noteCommit);
-        // Escape → restore original, close editor
         document.getElementById('detailNoteInput').addEventListener('keydown', e => {
             if (e.key === 'Escape') {
                 e.preventDefault();
@@ -2139,21 +2132,55 @@
         });
         detailModal.addEventListener('click', e => { if (e.target === detailModal) closeDetail(); });
 
-        // ═══ CTX MENU ═══
+        // ═══ TASK CTX MENU ═══
         let ctxTarget = null;
         const ctxMenu = document.getElementById('ctxMenu');
         function showCtx(e, tid) {
             e.preventDefault(); e.stopPropagation(); ctxTarget = tid;
+            colCtxMenu.classList.remove('show'); // close column menu
             ctxMenu.style.left = Math.min(e.clientX, innerWidth - 180) + 'px';
             ctxMenu.style.top = Math.min(e.clientY, innerHeight - 80) + 'px';
             ctxMenu.classList.add('show');
         }
-        document.addEventListener('click', () => ctxMenu.classList.remove('show'));
+        document.addEventListener('click', () => { ctxMenu.classList.remove('show'); colCtxMenu.classList.remove('show'); });
         ctxMenu.addEventListener('click', e => {
             const item = e.target.closest('.ctx-item'); if (!item || !ctxTarget) return;
             if (item.dataset.action === 'detail') openDetail(ctxTarget);
             if (item.dataset.action === 'delete') { if (confirm('削除しますか？')) { for (const c of state.columns) c.tasks = c.tasks.filter(t => t.id !== ctxTarget); save(); render(); } }
             ctxMenu.classList.remove('show');
+        });
+
+        // ═══ COLUMN CTX MENU (NEW) ═══
+        let ctxColTarget = null;
+        const colCtxMenu = document.getElementById('colCtxMenu');
+
+        function showColCtx(e, colId) {
+            e.preventDefault(); e.stopPropagation();
+            ctxColTarget = colId;
+            ctxMenu.classList.remove('show'); // close task menu
+            colCtxMenu.style.left = Math.min(e.clientX, innerWidth - 180) + 'px';
+            colCtxMenu.style.top = Math.min(e.clientY, innerHeight - 100) + 'px';
+            colCtxMenu.classList.add('show');
+        }
+
+        colCtxMenu.addEventListener('click', e => {
+            const item = e.target.closest('[data-col-action]'); if (!item || !ctxColTarget) return;
+            const col = state.columns.find(c => c.id === ctxColTarget);
+            if (!col) return;
+
+            if (item.dataset.colAction === 'rename') {
+                const name = prompt('新しい列名:', col.title);
+                if (name && name.trim()) { col.title = name.trim(); save(); render(); }
+            }
+            else if (item.dataset.colAction === 'delete') {
+                const taskCount = col.tasks.length;
+                const warn = taskCount > 0 ? `\n⚠️ この列には ${taskCount} 件のタスクがあります。削除すると全て失われます。` : '';
+                if (confirm(`列「${col.title}」を削除しますか？${warn}`)) {
+                    state.columns = state.columns.filter(c => c.id !== ctxColTarget);
+                    save(); render();
+                }
+            }
+            colCtxMenu.classList.remove('show');
         });
 
         // ═══ BOARD EVENTS ═══
@@ -2195,10 +2222,11 @@
                 const name = prompt('列名を入力:', '新しい列');
                 if (name && name.trim()) { state.columns.push({ id: uid(), title: name.trim(), tasks: [] }); save(); render(); }
             }
+            // col-menu now opens the column context menu
             else if (act === 'col-menu') {
-                const col = state.columns.find(c => c.id === colId);
-                const name = prompt('列名を変更:', col?.title);
-                if (name && name.trim() && col) { col.title = name.trim(); save(); render(); }
+                const btn = el;
+                const rect = btn.getBoundingClientRect();
+                showColCtx({ clientX: rect.left, clientY: rect.bottom, preventDefault: () => {}, stopPropagation: () => {} }, colId);
             }
         });
 
